@@ -1,19 +1,8 @@
-/**
- * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- */
-
-#include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
-#include "tusb.h"
+#include "pico/time.h"
 #include "pico/multicore.h"
 #include "hardware/uart.h"
-
-#include <vector>
-
-/// \tag::hello_uart[]
 
 #define UART_ID uart0
 #define BAUD_RATE 1000000
@@ -59,6 +48,7 @@ void parse_bit(bool bit){
 
         if(state == e_DATA){
             uart_putc_raw(UART_ID, val);
+            multicore_fifo_push_timeout_us(val, 0);
         }
         
         bit_counter = 0;
@@ -87,16 +77,22 @@ void gpio_callback(uint gpio, uint32_t events) {
 }
 
 void core1_entry(){
-
+    while(1){
+        uint8_t c = multicore_fifo_pop_blocking();
+        putchar_raw(c);
+    }
 }
 
 int main() {
+    stdio_init_all();
+    multicore_launch_core1(core1_entry);
+
     uart_init(UART_ID, BAUD_RATE);
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
     
-    uart_putc_raw(UART_ID, 'A');
-
+    uart_putc_raw(UART_ID, '$');
+    multicore_fifo_push_timeout_us('$', 0);
 
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
